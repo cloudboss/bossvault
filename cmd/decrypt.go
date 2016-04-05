@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	bv "github.com/cloudboss/bossvault/lib"
@@ -31,6 +32,7 @@ import (
 var (
 	decArtifact string
 	decBucket   string
+	decOutfile  string
 
 	decryptCmd = &cobra.Command{
 		Use:   "decrypt",
@@ -42,7 +44,16 @@ var (
 				println(err.Error())
 				os.Exit(1)
 			}
-			fmt.Printf(string(b))
+
+			if decOutfile != "" {
+				err := ioutil.WriteFile(decOutfile, b, 0600)
+				if err != nil {
+					println(err.Error())
+					os.Exit(1)
+				}
+			} else {
+				fmt.Printf(string(b))
+			}
 		},
 	}
 )
@@ -51,4 +62,5 @@ func init() {
 	RootCmd.AddCommand(decryptCmd)
 	decryptCmd.Flags().StringVarP(&decArtifact, "artifact", "a", "", "Name of artifact to be decrypted")
 	decryptCmd.Flags().StringVarP(&decBucket, "bucket", "b", "", "Name of bucket containing encrypted artifact")
+	decryptCmd.Flags().StringVarP(&decOutfile, "out", "o", "", "Name of file in which to write artifact")
 }
