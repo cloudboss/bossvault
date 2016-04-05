@@ -21,33 +21,33 @@
 package cmd
 
 import (
+	"os"
+
 	bv "github.com/cloudboss/bossvault/lib"
 	"github.com/spf13/cobra"
 )
 
 var (
-	encNamespace string
-	encArtifact  string
-	encContent   string
-	encBucket    string
+	encArtifact string
+	encContent  string
+	encBucket   string
 
 	encryptCmd = &cobra.Command{
 		Use:   "encrypt",
 		Short: "Encrypt bytes and store the data in S3.",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			client := bv.NewBossVaultClient()
 			err := client.EncryptAndStore(encBucket, encArtifact, encContent)
 			if err != nil {
-				return err
+				println(err.Error())
+				os.Exit(1)
 			}
-			return nil
 		},
 	}
 )
 
 func init() {
 	RootCmd.AddCommand(encryptCmd)
-	encryptCmd.Flags().StringVarP(&encNamespace, "namespace", "n", "", "Namespace of artifacts")
 	encryptCmd.Flags().StringVarP(&encArtifact, "artifact", "a", "", "Name of artifact to be encrypted")
 	encryptCmd.Flags().StringVarP(&encBucket, "bucket", "b", "", "Name of bucket in which to store artifact")
 	encryptCmd.Flags().StringVarP(&encContent, "content", "c", "", "Path to file containing content to be encrypted")

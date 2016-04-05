@@ -184,7 +184,7 @@ func (c *BossVaultClient) EncryptAndStore(bucket, artifact, content string) erro
 	return nil
 }
 
-func (c *BossVaultClient) RetrieveAndDecrypt(namespace, bucket, artifact string) ([]byte, error) {
+func (c *BossVaultClient) RetrieveAndDecrypt(bucket, artifact string) ([]byte, error) {
 	obj, err := c.S3.GetObject(
 		&s3.GetObjectInput{
 			Bucket: &bucket,

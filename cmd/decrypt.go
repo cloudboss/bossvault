@@ -22,44 +22,33 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
+	"os"
 
 	bv "github.com/cloudboss/bossvault/lib"
 	"github.com/spf13/cobra"
 )
 
 var (
-	decNamespace string
-	decArtifact  string
-	decBucket    string
+	decArtifact string
+	decBucket   string
 
 	decryptCmd = &cobra.Command{
 		Use:   "decrypt",
 		Short: "Retrieve and decrypt an encrypted artifact.",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			client := bv.NewBossVaultClient()
-			b, err := client.RetrieveAndDecrypt(decNamespace, decBucket, decArtifact)
+			b, err := client.RetrieveAndDecrypt(decBucket, decArtifact)
 			if err != nil {
-				return err
+				println(err.Error())
+				os.Exit(1)
 			}
 			fmt.Printf(string(b))
-
-			i := 100
-			si := strconv.Itoa(i)
-			b = []byte(si)
-
-			is := string(b)
-			fmt.Println(is)
-			fmt.Println(strconv.Atoi(is))
-
-			return nil
 		},
 	}
 )
 
 func init() {
 	RootCmd.AddCommand(decryptCmd)
-	decryptCmd.Flags().StringVarP(&decNamespace, "namespace", "n", "", "Namespace of artifacts")
 	decryptCmd.Flags().StringVarP(&decArtifact, "artifact", "a", "", "Name of artifact to be encrypted")
 	decryptCmd.Flags().StringVarP(&decBucket, "bucket", "b", "", "Name of bucket in which to store artifact")
 }
