@@ -140,11 +140,17 @@ func (kc *kmsClient) keyIdForAlias(alias string) (string, error) {
 	var keyId string
 	var err error
 
-	aliases := []*kms.AliasListEntry{}
+	fullAlias := fmt.Sprintf("alias/%s", alias)
+
 	err = kc.ListAliasesPages(
 		&kms.ListAliasesInput{},
 		func(out *kms.ListAliasesOutput, lastPage bool) bool {
-			aliases = append(aliases, out.Aliases...)
+			for _, a := range out.Aliases {
+				if *a.AliasName == fullAlias {
+					keyId = *a.TargetKeyId
+					return true
+				}
+			}
 			return lastPage
 		},
 	)
@@ -152,13 +158,6 @@ func (kc *kmsClient) keyIdForAlias(alias string) (string, error) {
 		return keyId, err
 	}
 
-	fullAlias := fmt.Sprintf("alias/%s", alias)
-	for _, a := range aliases {
-		if *a.AliasName == fullAlias {
-			keyId = *a.TargetKeyId
-			break
-		}
-	}
 	if keyId == "" {
 		err = fmt.Errorf("No master key found with alias %s", alias)
 	}
