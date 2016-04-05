@@ -95,7 +95,7 @@ func (kc *KmsClient) KeyIdForAlias(alias string) (string, error) {
 		}
 	}
 	if keyId == "" {
-		err = fmt.Errorf("No such alias found")
+		err = fmt.Errorf("No master key found with alias %s", alias)
 	}
 
 	return keyId, err
