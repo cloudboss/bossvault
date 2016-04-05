@@ -38,28 +38,93 @@ import (
 
 const CiphertextLength = 204
 
-type KmsClient struct {
-	*kms.KMS
-}
-
-type S3Client struct {
-	*s3.S3
-}
-
 type BossVaultClient struct {
-	Kms *KmsClient
-	S3  *S3Client
+	kms *kmsClient
+	s3  *s3Client
 }
 
 func NewBossVaultClient() *BossVaultClient {
 	s := session.New()
 	return &BossVaultClient{
-		Kms: &KmsClient{kms.New(s)},
-		S3:  &S3Client{s3.New(s)},
+		kms: &kmsClient{kms.New(s)},
+		s3:  &s3Client{s3.New(s)},
 	}
 }
 
-func (kc *KmsClient) DataKey(keyId string) (out *kms.GenerateDataKeyOutput, err error) {
+func (c *BossVaultClient) EncryptAndStore(bucket, artifact, content string) error {
+	namespace, err := nsFrom(artifact)
+	if err != nil {
+		return err
+	}
+
+	plaintext, err := contentBytes(content)
+	if err != nil {
+		return err
+	}
+
+	keyId, err := c.kms.keyIdForAlias(namespace)
+	if err != nil {
+		return err
+	}
+
+	dk, err := c.kms.dataKey(keyId)
+	if err != nil {
+		return err
+	}
+
+	encrypted, err := encrypt(plaintext, dk.Plaintext)
+	if err != nil {
+		return err
+	}
+
+	return c.s3.store(artifact, bucket, encrypted, dk.CiphertextBlob)
+}
+
+func (c *BossVaultClient) RetrieveAndDecrypt(bucket, artifact string) ([]byte, error) {
+	obj, err := c.s3.GetObject(
+		&s3.GetObjectInput{
+			Bucket: &bucket,
+			Key:    &artifact,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := ioutil.ReadAll(obj.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedKey := content[:CiphertextLength]
+	payload := content[CiphertextLength:]
+
+	dk, err := c.kms.Decrypt(
+		&kms.DecryptInput{
+			CiphertextBlob: encryptedKey,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	decrypted, err := decrypt(payload, dk.Plaintext)
+	if err != nil {
+		return nil, err
+	}
+
+	return decrypted, nil
+}
+
+type kmsClient struct {
+	*kms.KMS
+}
+
+type s3Client struct {
+	*s3.S3
+}
+
+func (kc *kmsClient) dataKey(keyId string) (out *kms.GenerateDataKeyOutput, err error) {
 	keySpec := "AES_256"
 	out, err = kc.GenerateDataKey(&kms.GenerateDataKeyInput{
 		KeyId:   &keyId,
@@ -71,7 +136,7 @@ func (kc *KmsClient) DataKey(keyId string) (out *kms.GenerateDataKeyOutput, err 
 	return
 }
 
-func (kc *KmsClient) KeyIdForAlias(alias string) (string, error) {
+func (kc *kmsClient) keyIdForAlias(alias string) (string, error) {
 	var keyId string
 	var err error
 
@@ -101,7 +166,23 @@ func (kc *KmsClient) KeyIdForAlias(alias string) (string, error) {
 	return keyId, err
 }
 
-func RandomBytes(n int) ([]byte, error) {
+func (sc *s3Client) store(artifact, bucket string, encrypted, encryptedKey []byte) error {
+	sse := "aws:kms"
+	key := fmt.Sprintf("%s.enc", artifact)
+	payload := append(encryptedKey, encrypted...)
+	body := bytes.NewReader(payload)
+	_, err := sc.PutObject(
+		&s3.PutObjectInput{
+			Bucket:               &bucket,
+			Key:                  &key,
+			Body:                 body,
+			ServerSideEncryption: &sse,
+		},
+	)
+	return err
+}
+
+func randomBytes(n int) ([]byte, error) {
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
 		return nil, err
@@ -109,7 +190,7 @@ func RandomBytes(n int) ([]byte, error) {
 	return buf, nil
 }
 
-func ContentBytes(content string) ([]byte, error) {
+func contentBytes(content string) ([]byte, error) {
 	var buf []byte
 	var err error
 	parts := strings.Split(content, "@")
@@ -129,7 +210,7 @@ func ContentBytes(content string) ([]byte, error) {
 	return buf, err
 }
 
-func NsFrom(artifact string) (ns string, err error) {
+func nsFrom(artifact string) (ns string, err error) {
 	parts := strings.Split(artifact, "/")
 	if len(parts) == 1 {
 		err = fmt.Errorf("Invalid artifact name")
@@ -139,88 +220,7 @@ func NsFrom(artifact string) (ns string, err error) {
 	return ns, err
 }
 
-func (c *BossVaultClient) EncryptAndStore(bucket, artifact, content string) error {
-	namespace, err := NsFrom(artifact)
-	if err != nil {
-		return err
-	}
-
-	plaintext, err := ContentBytes(content)
-	if err != nil {
-		return err
-	}
-
-	keyId, err := c.Kms.KeyIdForAlias(namespace)
-	if err != nil {
-		return err
-	}
-
-	dk, err := c.Kms.DataKey(keyId)
-	if err != nil {
-		return err
-	}
-
-	encrypted, err := Encrypt(plaintext, dk.Plaintext)
-	if err != nil {
-		return err
-	}
-
-	sse := "aws:kms"
-	key := fmt.Sprintf("%s.enc", artifact)
-	payload := append(dk.CiphertextBlob, encrypted...)
-	body := bytes.NewReader(payload)
-	_, err = c.S3.PutObject(
-		&s3.PutObjectInput{
-			Bucket:               &bucket,
-			Key:                  &key,
-			Body:                 body,
-			ServerSideEncryption: &sse,
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *BossVaultClient) RetrieveAndDecrypt(bucket, artifact string) ([]byte, error) {
-	obj, err := c.S3.GetObject(
-		&s3.GetObjectInput{
-			Bucket: &bucket,
-			Key:    &artifact,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	content, err := ioutil.ReadAll(obj.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	encryptedKey := content[:CiphertextLength]
-	payload := content[CiphertextLength:]
-
-	dataKey, err := c.Kms.Decrypt(
-		&kms.DecryptInput{
-			CiphertextBlob: encryptedKey,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	decrypted, err := Decrypt(payload, dataKey.Plaintext)
-	if err != nil {
-		return nil, err
-	}
-
-	return decrypted, nil
-}
-
-func Encrypt(plaintext, key []byte) ([]byte, error) {
+func encrypt(plaintext, key []byte) ([]byte, error) {
 	var block cipher.Block
 	var err error
 	var iv []byte
@@ -229,7 +229,7 @@ func Encrypt(plaintext, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if iv, err = RandomBytes(aes.BlockSize); err != nil {
+	if iv, err = randomBytes(aes.BlockSize); err != nil {
 		return nil, err
 	}
 
@@ -240,7 +240,7 @@ func Encrypt(plaintext, key []byte) ([]byte, error) {
 	return append(iv, ciphertext...), nil
 }
 
-func Decrypt(ciphertext, key []byte) ([]byte, error) {
+func decrypt(ciphertext, key []byte) ([]byte, error) {
 	iv := ciphertext[:aes.BlockSize]
 	payload := ciphertext[aes.BlockSize:]
 	decrypted := make([]byte, len(payload))
