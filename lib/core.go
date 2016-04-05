@@ -168,13 +168,12 @@ func (kc *kmsClient) keyIdForAlias(alias string) (string, error) {
 
 func (sc *s3Client) store(artifact, bucket string, encrypted, encryptedKey []byte) error {
 	sse := "aws:kms"
-	key := fmt.Sprintf("%s.enc", artifact)
 	payload := append(encryptedKey, encrypted...)
 	body := bytes.NewReader(payload)
 	_, err := sc.PutObject(
 		&s3.PutObjectInput{
 			Bucket:               &bucket,
-			Key:                  &key,
+			Key:                  &artifact,
 			Body:                 body,
 			ServerSideEncryption: &sse,
 		},
