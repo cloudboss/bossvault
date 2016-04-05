@@ -49,6 +49,6 @@ var (
 
 func init() {
 	RootCmd.AddCommand(decryptCmd)
-	decryptCmd.Flags().StringVarP(&decArtifact, "artifact", "a", "", "Name of artifact to be encrypted")
-	decryptCmd.Flags().StringVarP(&decBucket, "bucket", "b", "", "Name of bucket in which to store artifact")
+	decryptCmd.Flags().StringVarP(&decArtifact, "artifact", "a", "", "Name of artifact to be decrypted")
+	decryptCmd.Flags().StringVarP(&decBucket, "bucket", "b", "", "Name of bucket containing encrypted artifact")
 }
