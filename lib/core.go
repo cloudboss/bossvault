@@ -108,12 +108,7 @@ func (c *BossVaultClient) RetrieveAndDecrypt(bucket, artifact string) ([]byte, e
 		return nil, err
 	}
 
-	decrypted, err := decrypt(payload, dk.Plaintext)
-	if err != nil {
-		return nil, err
-	}
-
-	return decrypted, nil
+	return decrypt(payload, dk.Plaintext)
 }
 
 type kmsClient struct {
