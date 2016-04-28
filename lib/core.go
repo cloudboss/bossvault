@@ -215,35 +215,40 @@ func nsFrom(artifact string) (ns string, err error) {
 
 func encrypt(plaintext, key []byte) ([]byte, error) {
 	var block cipher.Block
+	var gcm cipher.AEAD
 	var err error
-	var iv []byte
+	var nonce []byte
 
 	if block, err = aes.NewCipher(key); err != nil {
 		return nil, err
 	}
 
-	if iv, err = randomBytes(aes.BlockSize); err != nil {
+	if gcm, err = cipher.NewGCM(block); err != nil {
 		return nil, err
 	}
 
-	ciphertext := make([]byte, len(plaintext))
-	cfb := cipher.NewCFBEncrypter(block, iv)
-	cfb.XORKeyStream(ciphertext, plaintext)
+	if nonce, err = randomBytes(gcm.NonceSize()); err != nil {
+		return nil, err
+	}
 
-	return append(iv, ciphertext...), nil
+	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
 func decrypt(ciphertext, key []byte) ([]byte, error) {
-	iv := ciphertext[:aes.BlockSize]
-	payload := ciphertext[aes.BlockSize:]
-	decrypted := make([]byte, len(payload))
+	var block cipher.Block
+	var gcm cipher.AEAD
+	var err error
 
-	if block, err := aes.NewCipher(key); err != nil {
+	if block, err = aes.NewCipher(key); err != nil {
 		return nil, err
-	} else {
-		cfb := cipher.NewCFBDecrypter(block, iv)
-		cfb.XORKeyStream(decrypted, payload)
 	}
 
-	return decrypted, nil
+	if gcm, err = cipher.NewGCM(block); err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	nonce := ciphertext[:nonceSize]
+
+	return gcm.Open(nil, nonce, ciphertext[nonceSize:], nil)
 }
