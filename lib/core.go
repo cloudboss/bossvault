@@ -119,16 +119,12 @@ type s3Client struct {
 	*s3.S3
 }
 
-func (kc *kmsClient) dataKey(keyId string) (out *kms.GenerateDataKeyOutput, err error) {
+func (kc *kmsClient) dataKey(keyId string) (*kms.GenerateDataKeyOutput, error) {
 	keySpec := "AES_256"
-	out, err = kc.GenerateDataKey(&kms.GenerateDataKeyInput{
+	return kc.GenerateDataKey(&kms.GenerateDataKeyInput{
 		KeyId:   &keyId,
 		KeySpec: &keySpec,
 	})
-	if err != nil {
-		return
-	}
-	return
 }
 
 func (kc *kmsClient) keyIdForAlias(alias string) (string, error) {
