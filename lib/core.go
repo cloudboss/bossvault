@@ -182,6 +182,10 @@ func randomBytes(n int) ([]byte, error) {
 func contentBytes(content string) ([]byte, error) {
 	var buf []byte
 	var err error
+
+	// If content starts with "@" and has remaining text, the
+	// remainder will be treated as a filename to be read from;
+	// otherwise content is used verbatim.
 	parts := strings.Split(content, "@")
 	if len(parts) > 1 && parts[0] == "" && len(parts[1]) > 0 {
 		path := parts[1]
